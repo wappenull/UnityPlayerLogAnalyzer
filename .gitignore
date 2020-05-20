@@ -2,3 +2,4 @@ Debug
 *.suo
 /UnityPlayerLogAnalyzer/bin/Release
 /UnityPlayerLogAnalyzer/obj/Release
+/DemoImage.clip
