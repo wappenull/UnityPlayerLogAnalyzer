@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static UnityPlayerLogAnalyzer.LineUtil;
 
 namespace UnityPlayerLogAnalyzer
 {
@@ -20,6 +21,8 @@ namespace UnityPlayerLogAnalyzer
 
         private void Form1_Load( object sender, EventArgs e )
         {
+            // Inject product version to title bar
+            this.Text = Text + $" V. {ProductVersion}";
             optGrouping.SelectedIndex = 0;
         }
 
@@ -30,30 +33,6 @@ namespace UnityPlayerLogAnalyzer
             {
                 _Convert( file );
                 Debug.WriteLine( "file is here! " + file );
-            }
-        }
-
-        class LogLine
-        {
-            public enum LogType
-            {
-                Log,
-                Warning,
-                Error
-            }
-
-            public LogType type;
-            public int sequence;
-            public string message;
-            public string callstack;
-
-            public int repeat = 1;
-            public int startFromSourceLine;
-            public int endAtSourceLine;
-
-            public bool SameWith( LogLine rhs )
-            {
-                return type == rhs.type && message == rhs.message && callstack == rhs.callstack;
             }
         }
 
@@ -84,41 +63,44 @@ namespace UnityPlayerLogAnalyzer
 
             if( m_LogLines.Count == 0 )
             {
-                MessageBox.Show( $"Program cannot detect pattern such as\n{LogKeyword}\nLog file might be from non-dev mode or script debugging turned off.\nNow giveup or go to github to modify this program yourself!\n\nTeehee!", "Teehee!", MessageBoxButtons.OK, MessageBoxIcon.Error );
+                MessageBox.Show( $"Program cannot detect pattern such as\n{CaptureMethod1.LogKeyword}\nLog file might be from non-dev mode or script debugging turned off.\nNow giveup or go to github to modify this program yourself!\n\nTeehee!", "Teehee!", MessageBoxButtons.OK, MessageBoxIcon.Error );
                 return;
             }
-            // Output yaml here
-            int firstLogStartsAtLine = allLines.Length;
-            if( m_LogLines.Count > 0 )
-                firstLogStartsAtLine = m_LogLines[0].startFromSourceLine;
-
-            // Print first part because it captures client machine info and other etc.
-            sb.AppendLine( _CaptureTextFromToLine( 0, firstLogStartsAtLine, allLines ) );
-
-            _WriteToOutputLog( sb, m_LogLines );
+            
+            _WriteToOutputLog( sb, allLines, m_LogLines );
 
             string outputPath = path + ".yaml";
             System.IO.File.WriteAllText( outputPath, sb.ToString( ) );
             label1.Text = $"Output to {outputPath}\nLog line found {m_LogLines.Count}";
-            
         }
-
-        const string LogKeyword = "UnityEngine.Debug:Log";
-        const string CallStackStart = "UnityEngine.DebugLogHandler:Internal_Log";
 
         private void _ExtractLogLines( List<LogLine> logs, string[] allLines )
         {
             int sequence = 1;
             for( int i=0 ; i<allLines.Length ; i++ )
             {
-                if( allLines[i].StartsWith( LogKeyword ) )
+                // Pattern 1
+                if( CaptureMethod1.Detect( allLines[i] ) )
                 {
                     LogLine ll = new LogLine( );
                     ll.sequence = sequence;
                     sequence++;
 
-                    _CaptureLogLineAround( i, allLines, ll );
+                    CaptureMethod1.CaptureLogLineAround( i, allLines, ll );
                     _AddByGrouping( ll, logs, m_GroupingStyle );
+
+                    i = ll.endAtSourceLine + 1;
+                }
+                else if( CaptureMethod2.Detect( allLines[i] ) )
+                {
+                    LogLine ll = new LogLine( );
+                    ll.sequence = sequence;
+                    sequence++;
+
+                    CaptureMethod2.CaptureLogLineAround( i, allLines, ll );
+                    _AddByGrouping( ll, logs, m_GroupingStyle );
+
+                    i = ll.endAtSourceLine + 1;
                 }
             }
                  
@@ -164,94 +146,9 @@ namespace UnityPlayerLogAnalyzer
             logs.Add( ll );
         }
 
-        private static void _CaptureLogLineAround( int i, string[] allLines, LogLine ll )
-        {
-            string logType = allLines[i].Replace( LogKeyword, "" );
-            if( logType.StartsWith( "Error" ) )
-                ll.type = LogLine.LogType.Error;
-            else if( logType.StartsWith( "Warning" ) )
-                ll.type = LogLine.LogType.Warning;
-            else 
-                ll.type = LogLine.LogType.Log;
-
-            // Find head, search up until we find double blank line
-            int head = _SearchForDoubleNewLine( i, allLines, SearchDirection.Up );
-            int callStackStart = _SearchForLineBeginWith( i, allLines, CallStackStart, SearchDirection.Up );
-
-            // File tail, search down until we find double blank line
-            int tail = _SearchForDoubleNewLine( i, allLines, SearchDirection.Down );
-
-            // Hack for first log, as it includes unity internal output by 1 line above
-            if( ll.sequence == 1 )
-            {
-                head++;
-            }
-
-            ll.message = _CaptureTextFromToLine( head, callStackStart, allLines );
-            ll.callstack = _CaptureTextFromToLine( i+1, tail, allLines );
-
-            ll.startFromSourceLine = head;
-            ll.endAtSourceLine = tail;
-        }
-
-        private static string _CaptureTextFromToLine( int from, int to, string[] allLines )
-        {
-            return string.Join( "\n", allLines, from, to-from );
-        }
-
-        /// <summary>
-        /// Returns last line number BEFORE we hit double new line.
-        /// </summary>
-        private static int _SearchForDoubleNewLine( int i, string[] allLines, SearchDirection dir )
-        {
-            if( dir == SearchDirection.Up )
-            {
-                while( i-- > 0 )
-                {
-                    if( string.IsNullOrWhiteSpace( allLines[i] ) ) // As all lines are already splitted, if there is empty line that's mean there is double newline there
-                        return i+1;
-                }
-            }
-            else
-            {
-                while( ++i < allLines.Length )
-                {
-                    if( string.IsNullOrWhiteSpace( allLines[i] ) )
-                        return i-1;
-                }
-            }
-            return i;
-        }
-
-        private static int _SearchForLineBeginWith( int i, string[] allLines, string text, SearchDirection dir )
-        {
-            if( dir == SearchDirection.Up )
-            {
-                while( i-- > 0 )
-                {
-                    if( allLines[i].StartsWith( text ) )
-                        return i;
-                }
-            }
-            else
-            {
-                while( ++i < allLines.Length )
-                {
-                    if( allLines[i].StartsWith( text ) )
-                        return i;
-                }
-            }
-            return i;
-        }
-
-        enum SearchDirection
-        {
-            Up, Down
-        }
-
         /* Outputtting //////////////////////////////////////////////*/
 
-        private void _WriteToOutputLog( StringBuilder sb, List<LogLine> logLines )
+        private void _WriteToOutputLog( StringBuilder sb, string[] allLines, List<LogLine> logLines )
         {
             sb.AppendLine( );
             sb.AppendLine( $"# Exported with Wappen's UnityPlayerLogAnalyzer =====================" );
@@ -261,9 +158,7 @@ namespace UnityPlayerLogAnalyzer
             sb.AppendLine( $"GroupingStyle: {m_GroupingStyle}" );
             sb.AppendLine( $"# ===================================================================" );
             sb.AppendLine( );
-            sb.AppendLine( "# Log lines start here! ----------------------------------------------" );
-            sb.AppendLine( );
-
+          
             // Count all types
             int log, warning, error;
             log = warning = error = 0;
@@ -280,12 +175,28 @@ namespace UnityPlayerLogAnalyzer
             sb.AppendLine( $"# Counters" );
             sb.AppendLine( $"Error: {error}" );
             sb.AppendLine( $"Warning: {warning}" );
-            if( m_IgnoreMessageLog == false )
-                sb.AppendLine( $"Log: {log}" );
+            string ignoreMsg = m_IgnoreMessageLog ? " # Ignored" : "";
+            sb.AppendLine( $"Log: {log}{ignoreMsg}" );
             sb.AppendLine( );
+
+            sb.AppendLine( "# Log lines start here! ----------------------------------------------" );
+            sb.AppendLine( );
+
+            _PrintClientMachineInfo( sb, allLines );
 
             foreach( LogLine ll in logLines )
                 _WriteToOutputLogSingle( sb, ll );
+        }
+
+        private void _PrintClientMachineInfo( StringBuilder sb, string[] allLines )
+        {
+            // Output yaml here
+            int firstLogStartsAtLine = allLines.Length;
+            if( m_LogLines.Count > 0 )
+                firstLogStartsAtLine = m_LogLines[0].startFromSourceLine;
+
+            // Print first part because it captures client machine info and other etc.
+            sb.AppendLine( CaptureTextFromToLine( 0, firstLogStartsAtLine - 1, allLines ) );
         }
 
         private void _WriteToOutputLogSingle( StringBuilder sb, LogLine ll )
@@ -313,6 +224,8 @@ namespace UnityPlayerLogAnalyzer
             string c = ll.callstack.Replace( "\n", "\n" + StartListIndent ); // Insert indent for each line
             sb.AppendLine( "  Callstack:" );
             sb.AppendLine( StartListIndent + c );
+
+            sb.AppendLine( ); // One last blank line for entry to separated when expanded
         }
 
         private void Form1_DragEnter( object sender, DragEventArgs e )
