@@ -22,9 +22,9 @@ Follow my messy UI for instruction. Most of the time, drag and drop log file int
 (Not all caese are thoroughly tested, if you output nasty character or pattern to output message, it could mess up).
 
 ## Known Issues
-The program will look for certain line to capture, but these keywords and function name change could internally by Unity over the releases. 
+The program will look for certain line to capture, but these keywords and function name could be changed by Unity over the new releases. 
 
-Such as `UnityEngine.DebugLogHandler:Internal_Log` 2019.4.19 becomes `StackTraceUtility:ExtractStackTrace` in 2019.4.26. 
+Such as `UnityEngine.DebugLogHandler:Internal_Log` is 2019.4.19 had become `StackTraceUtility:ExtractStackTrace` in 2019.4.26. 
 
 I have included both keyword to the code. But have not yet test with any future version (Unity 2020)
 If the program does not recognize log line for the version you are using, you might have to do a soft mod yourself.
