@@ -43,13 +43,13 @@
             return i;
         }
 
-        public static int SearchForLineBeginWith( int i, string[] allLines, string text, SearchDirection dir )
+        public static int SearchForLineContaining( int i, string[] allLines, string text, SearchDirection dir )
         {
             if( dir == SearchDirection.Up )
             {
                 while( i-- > 0 )
                 {
-                    if( allLines[i].StartsWith( text ) )
+                    if( allLines[i].Contains( text ) )
                         return i;
                 }
             }
@@ -57,7 +57,7 @@
             {
                 while( ++i < allLines.Length )
                 {
-                    if( allLines[i].StartsWith( text ) )
+                    if( allLines[i].Contains( text ) )
                         return i;
                 }
             }

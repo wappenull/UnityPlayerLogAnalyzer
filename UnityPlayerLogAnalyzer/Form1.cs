@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static UnityPlayerLogAnalyzer.LineUtil;
+using YamlDotNet;
+using YamlDotNet.Serialization;
 
 namespace UnityPlayerLogAnalyzer
 {
@@ -16,6 +18,12 @@ namespace UnityPlayerLogAnalyzer
     {
         public Form1( )
         {
+            var builder = new SerializerBuilder( );
+            //builder.WithTypeInspector( inspector => new FieldTypeInspector( inspector ) );
+            builder.DisableAliases( ); // Allows item of repeated name to be serialized
+            //builder.WithEventEmitter(nextEmitter => new MultilineScalarFlowStyleEmitter(nextEmitter)); // Force all multiline into | mode
+            ISerializer ss = builder.Build( );
+
             InitializeComponent( );
         }
 
@@ -72,6 +80,7 @@ namespace UnityPlayerLogAnalyzer
             string outputPath = path + ".yaml";
             System.IO.File.WriteAllText( outputPath, sb.ToString( ) );
             label1.Text = $"Output to {outputPath}\nLog line found {m_LogLines.Count}";
+            MessageBox.Show( "Done" );
         }
 
         private void _ExtractLogLines( List<LogLine> logs, string[] allLines )
@@ -235,5 +244,22 @@ namespace UnityPlayerLogAnalyzer
 
         }
 
+        private void WebLinkClicked( object sender, LinkLabelLinkClickedEventArgs e )
+        {
+            LinkLabel lb = (LinkLabel)sender;
+            string url;
+            if( e.Link.LinkData != null )
+                url = e.Link.LinkData.ToString( );
+            else
+                url = lb.Text;
+
+            if( !url.Contains( "://" ) )
+                url = "https://" + url;
+
+            var si = new ProcessStartInfo(url);
+            si.UseShellExecute = true;
+            Process.Start( si );
+            lb.LinkVisited = true;
+        }
     }
 }
