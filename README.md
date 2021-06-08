@@ -12,6 +12,9 @@ This program will help you analyze these log files easier, with help of your fav
 - Remove normal message log entirely from input file, if you only interest in warning/error.
 - Option to collapse or show only unique error line, even if such line appear 100 times it will be collapsed to one.
 
+## Usage
+Follow my messy UI for instruction. Most of the time, drag and drop log file into the window.
+
 ## Tested with text editor:
 - VS Code
 - Notepad++
@@ -20,6 +23,13 @@ This program will help you analyze these log files easier, with help of your fav
 
 ## Known Issues
 The program will look for certain line to capture, but these keywords and function name change could internally by Unity over the releases. 
+
 Such as `UnityEngine.DebugLogHandler:Internal_Log` 2019.4.19 becomes `StackTraceUtility:ExtractStackTrace` in 2019.4.26. 
+
 I have included both keyword to the code. But have not yet test with any future version (Unity 2020)
 If the program does not recognize log line for the version you are using, you might have to do a soft mod yourself.
+
+## Download
+Visit [release section](https://github.com/wappenull/UnityPlayerLogAnalyzer/releases) for download.
+
+It is using .NET framework 4.7.2 Get the runtime if you dont have it yet: https://dotnet.microsoft.com/download/dotnet-framework/net472
