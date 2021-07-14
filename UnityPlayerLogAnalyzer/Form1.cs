@@ -9,8 +9,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static UnityPlayerLogAnalyzer.SourceFile;
-using YamlDotNet;
-using YamlDotNet.Serialization;
 
 namespace UnityPlayerLogAnalyzer
 {
@@ -18,12 +16,6 @@ namespace UnityPlayerLogAnalyzer
     {
         public Form1( )
         {
-            var builder = new SerializerBuilder( );
-            //builder.WithTypeInspector( inspector => new FieldTypeInspector( inspector ) );
-            builder.DisableAliases( ); // Allows item of repeated name to be serialized
-            //builder.WithEventEmitter(nextEmitter => new MultilineScalarFlowStyleEmitter(nextEmitter)); // Force all multiline into | mode
-            ISerializer ss = builder.Build( );
-
             InitializeComponent( );
         }
 
