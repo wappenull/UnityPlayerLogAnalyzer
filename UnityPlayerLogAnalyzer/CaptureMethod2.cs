@@ -1,7 +1,10 @@
-﻿using static UnityPlayerLogAnalyzer.LineUtil;
+﻿using static UnityPlayerLogAnalyzer.SourceFile;
 
 namespace UnityPlayerLogAnalyzer
 {
+    /// <summary>
+    /// This captures exception pattern.
+    /// </summary>
     static class CaptureMethod2
     {
         /// <summary>
@@ -23,22 +26,22 @@ namespace UnityPlayerLogAnalyzer
             return lineText.StartsWith( ExceptionPattern );
         }
 
-        public static void CaptureLogLineAround( int atLine, string[] allLines, LogLine ll )
+        public static void CaptureLogLineAround( int atLine, SourceFile source, LogLine ll )
         {
             // Type is always error for exception
-            ll.type = LogLine.LogType.Error;
+            ll.logType = LogLine.LogType.Error;
 
             // Find head/tail, search up until we find double blank line
-            int head = SearchForDoubleNewLine( atLine, allLines, SearchDirection.Up );
-            int tail = SearchForDoubleNewLine( atLine, allLines, SearchDirection.Down );
+            int head = source.SearchForDoubleNewLine( atLine, SearchDirection.Up );
+            int tail = source.SearchForDoubleNewLine( atLine, SearchDirection.Down );
 
-            CaptureMethodCommon.FastForwardLineIfThereIsUnityInternalLogLine( ref head, tail, allLines );
+            CaptureMethodCommon.FastForwardLineIfThereIsUnityInternalLogLine( ref head, tail, source );
 
             // Callstack start is line with first "  at " keyword. which is this line from Detect
             int callStackStart = atLine;
 
-            ll.message = CaptureTextFromToLine( head, callStackStart - 1, allLines );
-            ll.callstack = CaptureTextFromToLine( atLine, tail, allLines );
+            ll.message = source.CaptureTextFromToLine( head, callStackStart - 1 );
+            ll.callstack = source.CaptureTextFromToLine( atLine, tail );
 
             ll.startFromSourceLine = head;
             ll.endAtSourceLine = tail;

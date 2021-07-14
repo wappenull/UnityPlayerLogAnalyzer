@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static UnityPlayerLogAnalyzer.LineUtil;
+using static UnityPlayerLogAnalyzer.SourceFile;
 using YamlDotNet;
 using YamlDotNet.Serialization;
 
@@ -39,7 +39,7 @@ namespace UnityPlayerLogAnalyzer
             string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
             foreach( string file in files )
             {
-                _Convert( file );
+                _ConvertSafe( file );
                 Debug.WriteLine( "file is here! " + file );
             }
         }
@@ -48,7 +48,25 @@ namespace UnityPlayerLogAnalyzer
         int m_GroupingStyle;
         List<LogLine> m_LogLines;
 
-        private void _Convert( string path )
+        private void _ConvertSafe( string path )
+        {
+            try
+            {
+                _ConvertImpl( path );
+            }
+            catch( Exception e )
+            {
+                string msg = "There is an error parsing the log file. Probably the code is not strong enough to parse...." +
+                    "\nFork the code to fix this or report to this dumb dumb developer. The message is copied to your clipboard." +
+                    "\nThe exception reported is:" +
+                    "\n\n" + e.ToString( );
+
+                Clipboard.SetText( msg );
+                MessageBox.Show( msg, "Teehee!", MessageBoxButtons.OK, MessageBoxIcon.Error );
+            }
+        }
+
+        private void _ConvertImpl( string path )
         {
             m_IgnoreMessageLog = optNoLog.Checked;
             m_GroupingStyle = optGrouping.SelectedIndex;
@@ -65,9 +83,9 @@ namespace UnityPlayerLogAnalyzer
             // Extract logging part
             // Strategy is to revolve around "UnityEngine.Debug:Log" on start of the line, simple and stupid, no regex
             m_LogLines = new List<LogLine>( );
-            string[] allLines = sb.ToString( ).Split( '\n' );
+            SourceFile source = new SourceFile( sb.ToString( ) );
             sb.Clear( );
-            _ExtractLogLines( m_LogLines, allLines );
+            _ExtractLogLines( m_LogLines, source );
 
             if( m_LogLines.Count == 0 )
             {
@@ -75,7 +93,7 @@ namespace UnityPlayerLogAnalyzer
                 return;
             }
             
-            _WriteToOutputLog( sb, allLines, m_LogLines );
+            _WriteToOutputLog( sb, source, m_LogLines );
 
             string outputPath = path + ".yaml";
             System.IO.File.WriteAllText( outputPath, sb.ToString( ) );
@@ -83,30 +101,30 @@ namespace UnityPlayerLogAnalyzer
             MessageBox.Show( "Done" );
         }
 
-        private void _ExtractLogLines( List<LogLine> logs, string[] allLines )
+        private void _ExtractLogLines( List<LogLine> logs, SourceFile source )
         {
             int sequence = 1;
-            for( int i=0 ; i<allLines.Length ; i++ )
+            for( int i=0 ; i<source.Length ; i++ )
             {
                 // Pattern 1
-                if( CaptureMethod1.Detect( allLines[i] ) )
+                if( CaptureMethod1.Detect( source[i] ) )
                 {
                     LogLine ll = new LogLine( );
                     ll.sequence = sequence;
                     sequence++;
 
-                    CaptureMethod1.CaptureLogLineAround( i, allLines, ll );
+                    CaptureMethod1.CaptureLogLineAround( i, source, ll );
                     _AddByGrouping( ll, logs, m_GroupingStyle );
 
                     i = ll.endAtSourceLine + 1;
                 }
-                else if( CaptureMethod2.Detect( allLines[i] ) )
+                else if( CaptureMethod2.Detect( source[i] ) )
                 {
                     LogLine ll = new LogLine( );
                     ll.sequence = sequence;
                     sequence++;
 
-                    CaptureMethod2.CaptureLogLineAround( i, allLines, ll );
+                    CaptureMethod2.CaptureLogLineAround( i, source, ll );
                     _AddByGrouping( ll, logs, m_GroupingStyle );
 
                     i = ll.endAtSourceLine + 1;
@@ -157,7 +175,7 @@ namespace UnityPlayerLogAnalyzer
 
         /* Outputtting //////////////////////////////////////////////*/
 
-        private void _WriteToOutputLog( StringBuilder sb, string[] allLines, List<LogLine> logLines )
+        private void _WriteToOutputLog( StringBuilder sb, SourceFile source, List<LogLine> logLines )
         {
             sb.AppendLine( );
             sb.AppendLine( $"# Exported with Wappen's UnityPlayerLogAnalyzer =====================" );
@@ -173,7 +191,7 @@ namespace UnityPlayerLogAnalyzer
             log = warning = error = 0;
             foreach( LogLine ll in logLines )
             {
-                switch( ll.type )
+                switch( ll.logType )
                 {
                     case LogLine.LogType.Error: error++; break;
                     case LogLine.LogType.Warning: warning++; break;
@@ -191,36 +209,36 @@ namespace UnityPlayerLogAnalyzer
             sb.AppendLine( "# Log lines start here! ----------------------------------------------" );
             sb.AppendLine( );
 
-            _PrintClientMachineInfo( sb, allLines );
+            _PrintClientMachineInfo( sb, source );
 
             foreach( LogLine ll in logLines )
                 _WriteToOutputLogSingle( sb, ll );
         }
 
-        private void _PrintClientMachineInfo( StringBuilder sb, string[] allLines )
+        private void _PrintClientMachineInfo( StringBuilder sb, SourceFile source )
         {
             // Output yaml here
-            int firstLogStartsAtLine = allLines.Length;
+            int firstLogStartsAtLine = source.Length;
             if( m_LogLines.Count > 0 )
                 firstLogStartsAtLine = m_LogLines[0].startFromSourceLine;
 
             // Print first part because it captures client machine info and other etc.
-            sb.AppendLine( CaptureTextFromToLine( 0, firstLogStartsAtLine - 1, allLines ) );
+            sb.AppendLine( source.CaptureTextFromToLine( 0, firstLogStartsAtLine - 1 ) );
         }
 
         private void _WriteToOutputLogSingle( StringBuilder sb, LogLine ll )
         {
-            if( ll.type == LogLine.LogType.Log && m_IgnoreMessageLog )
+            if( ll.logType == LogLine.LogType.Log && m_IgnoreMessageLog )
                 return;
 
             // Header
-            sb.Append( $"{ll.type} {ll.sequence}: " );
+            sb.Append( $"{ll.logType} {ll.sequence}: " );
             string msg = ll.message.Replace( "\n", "\n  " ); // If there is newline in message, indent it
-            if( ll.type == LogLine.LogType.Error )
+            if( ll.logType == LogLine.LogType.Error )
                 sb.Append( "|" ); // Start with yaml multiline lateral to hightlight it to another color
-            else if( ll.type == LogLine.LogType.Warning )
+            else if( ll.logType == LogLine.LogType.Warning )
                 sb.Append( "|" );
-            else if( ll.type == LogLine.LogType.Log )
+            else if( ll.logType == LogLine.LogType.Log )
                 sb.Append( "#" );
 
             if( ll.repeat > 1 )

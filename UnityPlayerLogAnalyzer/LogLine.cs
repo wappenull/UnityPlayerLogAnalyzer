@@ -9,7 +9,7 @@
             Error
         }
 
-        public LogType type;
+        public LogType logType;
         public int sequence;
         public string message;
         public string callstack;
@@ -20,7 +20,7 @@
 
         public bool SameWith( LogLine rhs )
         {
-            return type == rhs.type && message == rhs.message && callstack == rhs.callstack;
+            return logType == rhs.logType && message == rhs.message && callstack == rhs.callstack;
         }
     }
 }

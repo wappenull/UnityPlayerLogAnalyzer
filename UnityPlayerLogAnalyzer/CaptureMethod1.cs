@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Windows.Forms;
-using static UnityPlayerLogAnalyzer.LineUtil;
+using static UnityPlayerLogAnalyzer.SourceFile;
 
 namespace UnityPlayerLogAnalyzer
 {
+    /// <summary>
+    /// This capture all logs including warning, errors. But not exceptions.
+    /// </summary>
     static class CaptureMethod1
     {
         public const string LogKeyword = "UnityEngine.Debug:Log";
@@ -20,30 +23,30 @@ namespace UnityPlayerLogAnalyzer
             return lineText.StartsWith( LogKeyword );
         }
 
-        public static void CaptureLogLineAround( int atLine, string[] allLines, LogLine ll )
+        public static void CaptureLogLineAround( int atLine, SourceFile source, LogLine ll )
         {
-            string logType = allLines[atLine].Replace( LogKeyword, "" );
+            string logType = source[atLine].Replace( LogKeyword, "" );
             if( logType.StartsWith( "Error" ) )
-                ll.type = LogLine.LogType.Error;
+                ll.logType = LogLine.LogType.Error;
             else if( logType.StartsWith( "Warning" ) )
-                ll.type = LogLine.LogType.Warning;
+                ll.logType = LogLine.LogType.Warning;
             else
-                ll.type = LogLine.LogType.Log;
+                ll.logType = LogLine.LogType.Log;
 
             // Find head/tail, search up until we find double blank line
-            int head = SearchForDoubleNewLine( atLine, allLines, SearchDirection.Up );
-            int tail = SearchForDoubleNewLine( atLine, allLines, SearchDirection.Down );
+            int headLine = source.SearchForDoubleNewLine( atLine, SearchDirection.Up );
+            int tailLine = source.SearchForDoubleNewLine( atLine, SearchDirection.Down );
             
-            CaptureMethodCommon.FastForwardLineIfThereIsUnityInternalLogLine( ref head, tail, allLines );
+            CaptureMethodCommon.FastForwardLineIfThereIsUnityInternalLogLine( ref headLine, tailLine, source );
 
             // 2019.4.26 log file uses another identifier
-            int callStackStart = SearchForLineContaining( atLine, allLines, CallStackStart_2019_4_Early, SearchDirection.Up );
+            int callStackStart = source.SearchForLineContaining( atLine, CallStackStart_2019_4_Early, SearchDirection.Up, limit: headLine );
             if( callStackStart < 0 )
-                callStackStart = SearchForLineContaining( atLine, allLines, CallStackStart_2019_4_26, SearchDirection.Up );
+                callStackStart = source.SearchForLineContaining( atLine, CallStackStart_2019_4_26, SearchDirection.Up, limit: headLine );
 
             if( callStackStart < 0 )
             {
-                callStackStart = head+1;// Default to one line message
+                callStackStart = headLine+1;// Default to one line message
                 if( !s_CallStackStartFaultWarned )
                 {
                     s_CallStackStartFaultWarned = true;
@@ -57,11 +60,11 @@ namespace UnityPlayerLogAnalyzer
             }
             
             // Usually message is just 1 line above Internal_Log
-            ll.message = CaptureTextFromToLine( head, callStackStart - 1, allLines );
-            ll.callstack = CaptureTextFromToLine( callStackStart + 1, tail, allLines );
+            ll.message = source.CaptureTextFromToLine( headLine, callStackStart - 1 );
+            ll.callstack = source.CaptureTextFromToLine( callStackStart + 1, tailLine );
 
-            ll.startFromSourceLine = head;
-            ll.endAtSourceLine = tail;
+            ll.startFromSourceLine = headLine;
+            ll.endAtSourceLine = tailLine;
         }
     }
 
@@ -71,9 +74,9 @@ namespace UnityPlayerLogAnalyzer
         /// Fast forward 'head' if there is predetermined Unity's internal logging line.
         /// But cannot goes beyond tail.
         /// </summary>
-        public static void FastForwardLineIfThereIsUnityInternalLogLine( ref int head, int tail, string[] allLines )
+        public static void FastForwardLineIfThereIsUnityInternalLogLine( ref int head, int tail, SourceFile source )
         {
-            while( head < allLines.Length && _IsUnityInternalLine( allLines[head] ) )
+            while( head < source.Length && _IsUnityInternalLine( source[head] ) )
             {
                 if( head + 1 >= tail ) // Cannot goes anymore than that
                     return;
